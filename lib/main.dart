@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'core/constants/colors.dart';
-import 'features/sapa_santai/presentation/sapa_santai_screen.dart';
+import 'features/sapa_kilat/presentation/sapa_kilat_screen.dart';
 import 'features/sapa_santai/presentation/category_selection_screen.dart';
 
 void main() {
@@ -105,7 +105,10 @@ class HomeScreen extends StatelessWidget {
                       icon: Icons.timer_outlined,
                       accentColor: AppColors.accentGreen,
                       onTap: () {
-                        // Untuk pengembangan mode sapa kilat nanti
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const SapaKilatScreen()),
+                        );
                       },
                     ),
                     const SizedBox(height: 20),
