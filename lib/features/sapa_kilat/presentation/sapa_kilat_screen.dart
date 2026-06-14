@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math; // Diperlukan untuk perhitungan rotasi 3D
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:soundpool/soundpool.dart'; // Menggunakan Soundpool
+import 'package:soundpool/soundpool.dart';
 import 'package:vibration/vibration.dart';
 import '../../../core/constants/colors.dart';
 
@@ -17,13 +18,15 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
   final List<String> _fallbackTopics = [
     "Sebutkan nama kota di Indonesia yang berawalan huruf S.",
     "Sebutkan benda berbentuk bulat di dalam rumah.",
-    "Sebutkan alasan klasik saat terlambat rapat.",
-    "Sebutkan jenis pekerjaan di bidang teknologi informasi."
+    "Sebutkan alasan klasik saat terlambat rapat."
   ];
 
   List<String> _topicsList = [];
   String _currentTopic = "";
   int _gameCardIndex = 0;
+  
+  // Fitur Gamification: Penghitung rantai operan sukses
+  int _scoreStreak = 0; 
   
   Timer? _masterEngineTimer;
   int _remainingMs = 10000;
@@ -34,7 +37,6 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
   bool _isGameActive = false;
   bool _isGameOver = false;
 
-  // Variabel untuk Soundpool
   late Soundpool _soundpool;
   int? _beepSoundId;
   int? _explosionSoundId;
@@ -49,19 +51,16 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
   @override
   void dispose() {
     _masterEngineTimer?.cancel();
-    _soundpool.release(); // Melepaskan memori RAM saat keluar layar
+    _soundpool.release();
     super.dispose();
   }
 
-  /// Menginisialisasi Soundpool dan me-load data mentah audio ke RAM
   Future<void> _initializeAudioComponents() async {
-    // Menggunakan streamType notification yang ringan
     _soundpool = Soundpool.fromOptions(
       options: const SoundpoolOptions(streamType: StreamType.notification)
     );
 
     try {
-      // Sangat disarankan file asli dikonversi ke format .wav agar CPU tidak perlu decoding
       _beepSoundId = await rootBundle.load('assets/audio/countdown.wav').then((ByteData soundData) {
         return _soundpool.load(soundData);
       });
@@ -84,32 +83,34 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
         return value?.toString() ?? '';
       }).where((text) => text.isNotEmpty).toList();
 
-      if (parsedList.isEmpty) throw Exception("Format JSON valid namun list kosong.");
-
       setState(() {
-        _topicsList = parsedList;
+        _topicsList = parsedList.isNotEmpty ? parsedList : List.from(_fallbackTopics);
         _topicsList.shuffle();
         _gameCardIndex = 0;
         _isLoading = false;
       });
     } catch (e) {
-      debugPrint("Gagal memuat JSON: $e");
       setState(() {
         _topicsList = List.from(_fallbackTopics);
         _topicsList.shuffle();
-        _gameCardIndex = 0;
         _isLoading = false;
       });
     }
   }
 
-  void _startNewCardCycle() {
+  void _startNewCardCycle({bool resetStreak = false}) {
     _masterEngineTimer?.cancel();
     
     setState(() {
       _remainingMs = 10000;
       _lastPlayedSecond = 11; 
       _hapticAccumulatorMs = 0;
+      
+      if (resetStreak) {
+        _scoreStreak = 0;
+      } else if (_isGameActive) {
+        _scoreStreak++; // Naikkan streak jika sukses mengoper sebelum meledak
+      }
       
       _currentTopic = _topicsList[_gameCardIndex];
       _gameCardIndex = (_gameCardIndex + 1) % _topicsList.length;
@@ -138,7 +139,6 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
 
       final int currentSecond = (_remainingMs / 1000).ceil();
 
-      // Audio Sync: Memanggil file di RAM yang sangat instan
       if (currentSecond < _lastPlayedSecond && currentSecond > 0) {
         _lastPlayedSecond = currentSecond;
         if (_beepSoundId != null) {
@@ -146,15 +146,8 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
         }
       }
 
-      // Haptic Sync
       _hapticAccumulatorMs += 100;
-      int dynamicHapticInterval = 1000; 
-
-      if (currentSecond <= 3) {
-        dynamicHapticInterval = 200;  
-      } else if (currentSecond <= 6) {
-        dynamicHapticInterval = 500;  
-      }
+      int dynamicHapticInterval = currentSecond <= 3 ? 200 : (currentSecond <= 6 ? 500 : 1000);
 
       if (_hapticAccumulatorMs >= dynamicHapticInterval) {
         _hapticAccumulatorMs = 0;
@@ -199,12 +192,34 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
   @override
   Widget build(BuildContext context) {
     final int displaySeconds = (_remainingMs / 1000).ceil();
+    
+    // Logika Kedipan Layar Merah saat fase kritis (di bawah 3 detik)
+    final bool isCritical = _isGameActive && displaySeconds <= 3;
+    final Color cardBackground = isCritical
+        ? (DateTime.now().millisecondsSinceEpoch % 500 < 250 
+            ? Colors.red.withValues(alpha: 0.15) 
+            : AppColors.surface)
+        : AppColors.surface;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
+        title: _isGameActive 
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.textPrimary,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  "🔥 STREAK: $_scoreStreak", 
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              )
+            : null,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
           onPressed: () => Navigator.pop(context),
@@ -228,16 +243,20 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
                   ),
                   const SizedBox(height: 32),
                   Expanded(
-                    child: Container(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
                       width: double.infinity,
                       padding: const EdgeInsets.all(32),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: cardBackground,
                         borderRadius: BorderRadius.circular(32),
-                        border: Border.all(color: Colors.black.withOpacity(0.05), width: 1),
+                        border: Border.all(
+                          color: isCritical ? Colors.red.withValues(alpha: 0.5) : Colors.black.withValues(alpha: 0.05), 
+                          width: isCritical ? 2 : 1
+                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: isCritical ? Colors.red.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.04),
                             blurRadius: 24,
                             offset: const Offset(0, 12),
                           ),
@@ -267,7 +286,7 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                   elevation: 0,
                                 ),
-                                onPressed: _startNewCardCycle,
+                                onPressed: () => _startNewCardCycle(resetStreak: true),
                                 child: const Text("Mulai Permainan", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                               ),
                             ),
@@ -282,11 +301,51 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
                               ),
                             ),
                             const Spacer(),
-                            Text(
-                              _currentTopic,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AppColors.textPrimary, height: 1.4),
+                            
+                            // ======================== ANIMASI 3D FLIP CARD START ========================
+                            Expanded(
+                              flex: 4,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 400),
+                                transitionBuilder: (Widget child, Animation<double> animation) {
+                                  // Membuat efek rotasi sumbu Y (Horizontal Flip)
+                                  final rotateY = Tween<double>(begin: math.pi / 2, end: 0.0).animate(
+                                    CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+                                  );
+                                  
+                                  return AnimatedBuilder(
+                                    animation: rotateY,
+                                    child: child,
+                                    builder: (context, fixedChild) {
+                                      return Transform(
+                                        transform: Matrix4.identity()
+                                          ..setEntry(3, 2, 0.0015) // Memberikan efek kedalaman/distorsi perspektif 3D
+                                          ..rotateY(rotateY.value),
+                                        alignment: Alignment.center,
+                                        child: fixedChild,
+                                      );
+                                    },
+                                  );
+                                },
+                                child: KeyedSubtree(
+                                  key: ValueKey<String>(_currentTopic), // Key krusial untuk mentrigger ulang animasi saat teks berganti
+                                  child: Center(
+                                    child: Text(
+                                      _currentTopic,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 26, 
+                                        fontWeight: FontWeight.bold, 
+                                        color: AppColors.textPrimary, 
+                                        height: 1.4
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
+                            // ======================== ANIMASI 3D FLIP CARD END ========================
+                            
                             const Spacer(),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
@@ -319,13 +378,13 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
                           ] else if (_isGameOver) ...[
                             const Icon(Icons.alarm_off_rounded, color: AppColors.accentOrange, size: 64),
                             const SizedBox(height: 24),
-                            const Text(
-                              "Waktu Anda Habis",
-                              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                            Text(
+                              "Waktu Habis! Streak: $_scoreStreak",
+                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                             ),
                             const SizedBox(height: 12),
                             const Text(
-                              "Perangkat gagal dioper sebelum batas waktu habis. Pemain yang memegang perangkat saat ini menerima konsekuensi kekalahan.",
+                              "Perangkat gagal dioper sebelum batas waktu habis. Pemain terakhir menerima konsekuensi kekalahan.",
                               textAlign: TextAlign.center,
                               style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
                             ),
@@ -339,7 +398,7 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                   elevation: 0,
                                 ),
-                                onPressed: _startNewCardCycle,
+                                onPressed: () => _startNewCardCycle(resetStreak: true),
                                 child: const Text("Main Lagi", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                               ),
                             ),
