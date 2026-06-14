@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Warna latar belakang yang hangat dan tidak bikin silau
-  static const Color background = Color(0xFFFDF6); 
-  static const Color primaryCard = Color(0xFFE27D60); // Terracotta hangat
-  static const Color secondaryCard = Color.fromARGB(188, 93, 248, 98); // Sage Green segar
-  static const Color accentCard = Color(0xFFE8A87C);    // Peach santai
+  static const Color background = Color(0xFFF5F5F7); // Putih Abu-abu khas Apple
+  static const Color surface = Color(0xFFFFFFFF);    // Putih bersih untuk Card
   
-  // Warna Teks
-  static const Color textPrimary = Color(0xFF2C3539);
-  static const Color textSecondary = Color(0xFF4A5568);
+  static const Color accentOrange = Color(0xFFE27D60); // Sapa Santai
+  static const Color accentGreen = Color(0xFF6B8E23);  // Sapa Kilat
+  static const Color accentBlue = Color(0xFF4A90E2);   // Sapa Tebak
+  
+  static const Color textPrimary = Color(0xFF1C1C1E);   // Hitam pekat
+  static const Color textSecondary = Color(0xFF636366); // Abu-abu gelap
+  static const Color textMuted = Color(0xFF8E8E93);     // Abu-abu terang
 }
