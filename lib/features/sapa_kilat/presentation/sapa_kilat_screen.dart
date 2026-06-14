@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math; // Diperlukan untuk perhitungan rotasi 3D
+import 'dart:math' as math; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:soundpool/soundpool.dart';
@@ -24,8 +24,6 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
   List<String> _topicsList = [];
   String _currentTopic = "";
   int _gameCardIndex = 0;
-  
-  // Fitur Gamification: Penghitung rantai operan sukses
   int _scoreStreak = 0; 
   
   Timer? _masterEngineTimer;
@@ -109,7 +107,7 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
       if (resetStreak) {
         _scoreStreak = 0;
       } else if (_isGameActive) {
-        _scoreStreak++; // Naikkan streak jika sukses mengoper sebelum meledak
+        _scoreStreak++; 
       }
       
       _currentTopic = _topicsList[_gameCardIndex];
@@ -189,12 +187,22 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
     _startNewCardCycle();
   }
 
+  /// Helper untuk menentukan Unique Key pada komponen Card agar memicu animasi Flip
+  LocalKey _getCardKey() {
+    if (!_isGameActive && !_isGameOver) {
+      return const ValueKey('rules_view');
+    } else if (_isGameOver) {
+      return const ValueKey('game_over_view');
+    } else {
+      return ValueKey(_currentTopic); // Berganti tiap kali topik di-oper
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final int displaySeconds = (_remainingMs / 1000).ceil();
-    
-    // Logika Kedipan Layar Merah saat fase kritis (di bawah 3 detik)
     final bool isCritical = _isGameActive && displaySeconds <= 3;
+    
     final Color cardBackground = isCritical
         ? (DateTime.now().millisecondsSinceEpoch % 500 < 250 
             ? Colors.red.withValues(alpha: 0.15) 
@@ -242,168 +250,160 @@ class _SapaKilatScreenState extends State<SapaKilatScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
+                  
+                  // ======================== ANIMASI INTERAKTIF 3D KARTU UTAMA ========================
                   Expanded(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: cardBackground,
-                        borderRadius: BorderRadius.circular(32),
-                        border: Border.all(
-                          color: isCritical ? Colors.red.withValues(alpha: 0.5) : Colors.black.withValues(alpha: 0.05), 
-                          width: isCritical ? 2 : 1
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: isCritical ? Colors.red.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 24,
-                            offset: const Offset(0, 12),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 450),
+                      switchInCurve: Curves.easeInOutCubic,
+                      switchOutCurve: Curves.easeInOutCubic,
+                      transitionBuilder: (Widget child, Animation<double> animation) {
+                        // Desain Interpolasi Nilai Rotasi Horizontal Sumbu Y
+                        final rotateY = Tween<double>(begin: math.pi / 2, end: 0.0).animate(animation);
+                        
+                        return AnimatedBuilder(
+                          animation: rotateY,
+                          child: child,
+                          builder: (context, fixedChild) {
+                            return Transform(
+                              transform: Matrix4.identity()
+                                ..setEntry(3, 2, 0.0012) // Memberikan efek kedalaman/proyeksi 3D bayangan gawai
+                                ..rotateY(rotateY.value),
+                              alignment: Alignment.center,
+                              child: fixedChild,
+                            );
+                          },
+                        );
+                      },
+                      // Menjadikan widget Container sebagai target animasi flip seutuhnya
+                      child: AnimatedContainer(
+                        key: _getCardKey(), // Key mendeteksi kapan struktur wajib melakukan pembalikan
+                        duration: const Duration(milliseconds: 200),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: cardBackground,
+                          borderRadius: BorderRadius.circular(32),
+                          border: Border.all(
+                            color: isCritical ? Colors.red.withValues(alpha: 0.5) : Colors.black.withValues(alpha: 0.05), 
+                            width: isCritical ? 2 : 1
                           ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (!_isGameActive && !_isGameOver) ...[
-                            const Text(
-                              "Aturan Permainan",
-                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isCritical ? Colors.red.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 24,
+                              offset: const Offset(0, 12),
                             ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              "Setiap pemain hanya memiliki waktu 10 detik untuk memberikan satu jawaban unik berdasarkan topik yang muncul. Segera tekan tombol oper setelah menjawab untuk menyegarkan waktu ke 10 detik bagi pemain berikutnya.",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
-                            ),
-                            const SizedBox(height: 40),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.textPrimary,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                  elevation: 0,
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (!_isGameActive && !_isGameOver) ...[
+                              const Text(
+                                "Aturan Permainan",
+                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                "Setiap pemain hanya memiliki waktu 10 detik untuk memberikan satu jawaban unik berdasarkan topik yang muncul. Segera tekan tombol oper setelah menjawab untuk menyegarkan waktu ke 10 detik bagi pemain berikutnya.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+                              ),
+                              const SizedBox(height: 40),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 50,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.textPrimary,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    elevation: 0,
+                                  ),
+                                  onPressed: () => _startNewCardCycle(resetStreak: true),
+                                  child: const Text("Mulai Permainan", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                 ),
-                                onPressed: () => _startNewCardCycle(resetStreak: true),
-                                child: const Text("Mulai Permainan", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                               ),
-                            ),
-                          ] else if (_isGameActive) ...[
-                            Text(
-                              "SISA WAKTU: $displaySeconds DETIK",
-                              style: TextStyle(
-                                fontSize: 13, 
-                                fontWeight: FontWeight.w800, 
-                                color: displaySeconds <= 3 ? AppColors.accentOrange : AppColors.accentGreen, 
-                                letterSpacing: 1.0
+                            ] else if (_isGameActive) ...[
+                              Text(
+                                "SISA WAKTU: $displaySeconds DETIK",
+                                style: TextStyle(
+                                  fontSize: 13, 
+                                  fontWeight: FontWeight.w800, 
+                                  color: displaySeconds <= 3 ? AppColors.accentOrange : AppColors.accentGreen, 
+                                  letterSpacing: 1.0
+                                ),
                               ),
-                            ),
-                            const Spacer(),
-                            
-                            // ======================== ANIMASI 3D FLIP CARD START ========================
-                            Expanded(
-                              flex: 4,
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 400),
-                                transitionBuilder: (Widget child, Animation<double> animation) {
-                                  // Membuat efek rotasi sumbu Y (Horizontal Flip)
-                                  final rotateY = Tween<double>(begin: math.pi / 2, end: 0.0).animate(
-                                    CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-                                  );
-                                  
-                                  return AnimatedBuilder(
-                                    animation: rotateY,
-                                    child: child,
-                                    builder: (context, fixedChild) {
-                                      return Transform(
-                                        transform: Matrix4.identity()
-                                          ..setEntry(3, 2, 0.0015) // Memberikan efek kedalaman/distorsi perspektif 3D
-                                          ..rotateY(rotateY.value),
-                                        alignment: Alignment.center,
-                                        child: fixedChild,
-                                      );
-                                    },
-                                  );
-                                },
-                                child: KeyedSubtree(
-                                  key: ValueKey<String>(_currentTopic), // Key krusial untuk mentrigger ulang animasi saat teks berganti
-                                  child: Center(
-                                    child: Text(
-                                      _currentTopic,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontSize: 26, 
-                                        fontWeight: FontWeight.bold, 
-                                        color: AppColors.textPrimary, 
-                                        height: 1.4
-                                      ),
-                                    ),
+                              const Spacer(),
+                              Text(
+                                _currentTopic,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 26, 
+                                  fontWeight: FontWeight.bold, 
+                                  color: AppColors.textPrimary, 
+                                  height: 1.4
+                                ),
+                              ),
+                              const Spacer(),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: LinearProgressIndicator(
+                                  value: _remainingMs / 10000,
+                                  minHeight: 8,
+                                  backgroundColor: AppColors.background,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    displaySeconds <= 3 ? AppColors.accentOrange : AppColors.accentGreen
                                   ),
                                 ),
                               ),
-                            ),
-                            // ======================== ANIMASI 3D FLIP CARD END ========================
-                            
-                            const Spacer(),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: LinearProgressIndicator(
-                                value: _remainingMs / 10000,
-                                minHeight: 8,
-                                backgroundColor: AppColors.background,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  displaySeconds <= 3 ? AppColors.accentOrange : AppColors.accentGreen
+                              const SizedBox(height: 40),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 58,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.textPrimary,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    elevation: 0,
+                                  ),
+                                  onPressed: _executePassCard,
+                                  child: const Text(
+                                    "Selesai Jawab dan Oper Perangkat",
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 40),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 58,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.textPrimary,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  elevation: 0,
-                                ),
-                                onPressed: _executePassCard,
-                                child: const Text(
-                                  "Selesai Jawab dan Oper Perangkat",
-                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                            ] else if (_isGameOver) ...[
+                              const Icon(Icons.alarm_off_rounded, color: AppColors.accentOrange, size: 64),
+                              const SizedBox(height: 24),
+                              Text(
+                                "Waktu Habis! Streak: $_scoreStreak",
+                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                "Perangkat gagal dioper sebelum batas waktu habis. Pemain terakhir menerima konsekuensi kekalahan.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+                              ),
+                              const SizedBox(height: 40),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 50,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.textPrimary,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    elevation: 0,
+                                  ),
+                                  onPressed: () => _startNewCardCycle(resetStreak: true),
+                                  child: const Text("Main Lagi", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                 ),
                               ),
-                            ),
-                          ] else if (_isGameOver) ...[
-                            const Icon(Icons.alarm_off_rounded, color: AppColors.accentOrange, size: 64),
-                            const SizedBox(height: 24),
-                            Text(
-                              "Waktu Habis! Streak: $_scoreStreak",
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              "Perangkat gagal dioper sebelum batas waktu habis. Pemain terakhir menerima konsekuensi kekalahan.",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
-                            ),
-                            const SizedBox(height: 40),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.textPrimary,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                  elevation: 0,
-                                ),
-                                onPressed: () => _startNewCardCycle(resetStreak: true),
-                                child: const Text("Main Lagi", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                              ),
-                            ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),
