@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/constants/colors.dart';
 import 'features/sapa_kilat/presentation/sapa_kilat_screen.dart';
 import 'features/sapa_santai/presentation/category_selection_screen.dart';
+import 'features/sapa_tebak/presentation/sapa_tebak_screen.dart';
 
 void main() {
   runApp(const TukarSapaApp());
@@ -116,11 +117,14 @@ class HomeScreen extends StatelessWidget {
                       context,
                       title: 'Sapa Tebak',
                       tagline: 'CHARADES PERFORMANCE',
-                      description: 'Taruh HP di jidatmu. Tebak kata konyol berdasarkan gerakan dan petunjuk dari temanmu.',
+                      description: 'Letakkan perangkat di dahi Anda. Tebak kata yang muncul berdasarkan petunjuk peragaan fisik dari teman Anda.',
                       icon: Icons.theater_comedy_outlined,
                       accentColor: AppColors.accentBlue,
                       onTap: () {
-                        // Untuk pengembangan mode sapa tebak nanti
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const SapaTebakScreen()),
+                        );
                       },
                     ),
                   ],
